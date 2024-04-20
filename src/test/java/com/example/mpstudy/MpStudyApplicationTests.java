@@ -15,6 +15,7 @@ class MpStudyApplicationTests {
 
     @Autowired
     private UserMapper userMapper;
+
     @Test
     public void testSelectList() {
         System.out.println(("----- selectAll method test ------"));
@@ -23,4 +24,26 @@ class MpStudyApplicationTests {
         List<User> users = userMapper.selectList(null);
         users.forEach(System.out::println);
     }
+
+    @Test
+    public void testInsert() {
+        User user = new User();
+        user.setName("Helen");
+        user.setAge(18);
+        user.setEmail("55317332@qq.com");
+        int result = userMapper.insert(user);
+        System.out.println(result); //影响的行数
+        System.out.println(user); //id自动回填
+
+    }
+
+    @Test
+    public void testUpdateById() {
+        User user = new User();
+        user.setId(1L);
+        user.setAge(28);
+        int result = userMapper.updateById(user);
+        System.out.println(result);
+    }
+
 }
