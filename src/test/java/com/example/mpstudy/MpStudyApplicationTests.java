@@ -37,6 +37,9 @@ class MpStudyApplicationTests {
 
     }
 
+
+
+
     @Test
     public void testUpdateById() {
         User user = new User();
@@ -44,6 +47,45 @@ class MpStudyApplicationTests {
         user.setAge(28);
         int result = userMapper.updateById(user);
         System.out.println(result);
+    }
+
+    /**
+     * 测试 乐观锁插件
+     */
+    @Test
+    public void testOptimisticLocker() {
+        //查询
+        User user = userMapper.selectById(1L);
+        //修改数据
+        user.setName("Helen Yao");
+        user.setEmail("helen@qq.com");
+        //执行更新
+        userMapper.updateById(user);
+    }
+    /**
+
+     * 测试乐观锁插件 失败
+
+     */
+
+    @Test
+    public void testOptimisticLockerFail() {
+        //查询
+        User user = userMapper.selectById(1L);
+        //修改数据
+        user.setName("Helen Yao1");
+        user.setEmail("helen@qq.com1");
+        //模拟取出数据后，数据库中version实际数据比取出的值大，即已被其它线程修改并更新了version
+
+        user.setVersion(user.getVersion() - 1);
+        //执行更新
+        userMapper.updateById(user);
+    }
+
+    @Test
+    public void testSelectById(){
+        User user = userMapper.selectById(1L);
+        System.out.println(user);
     }
 
 }

@@ -18,4 +18,8 @@ public class User {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private Date updateTime;
+
+    @Version
+    @TableField(fill = FieldFill.INSERT)
+    private Integer version;
 }
