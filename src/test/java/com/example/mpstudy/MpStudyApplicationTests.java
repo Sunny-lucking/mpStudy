@@ -9,6 +9,8 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -113,6 +115,34 @@ class MpStudyApplicationTests {
         System.out.println(page.getTotal());
         System.out.println(page.hasNext());
         System.out.println(page.hasPrevious());
+    }
+
+    @Test
+    public void testDeleteById(){
+        int result = userMapper.deleteById(8L);
+        System.out.println(result);
+    }
+    @Test
+    public void testDeleteBatchIds() {
+        int result = userMapper.deleteBatchIds(Arrays.asList(8, 9, 10));
+        System.out.println(result);
+    }
+    @Test
+    public void testDeleteByMap() {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("name", "Helen");
+        map.put("age", 18);
+        int result = userMapper.deleteByMap(map);
+        System.out.println(result);
+    }
+
+    /**
+     * 测试 逻辑删除
+     */
+    @Test
+    public void testLogicDelete() {
+        int result = userMapper.deleteById(1L);
+        System.out.println(result);
     }
 
 }
