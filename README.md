@@ -1,3 +1,4 @@
+[toc]
 ## 一、创建并初始化数据库
 ### 1、创建数据库：
 **mybatis_plus**
@@ -228,7 +229,7 @@ mybatis-plus.configuration.log-impl=org.apache.ibatis.logging.stdout.StdOutImpl
 ### 1、插入操作
 
 
-![](https://files.mdnice.com/user/3934/4da9b29d-3187-4ead-bd7b-bbf31b56dbd0.png)
+
 ```java
 @Test
 public void testInsert(){
@@ -242,6 +243,7 @@ public void testInsert(){
 
 }
 ```
+![](https://files.mdnice.com/user/3934/4da9b29d-3187-4ead-bd7b-bbf31b56dbd0.png)
 ### 2、主键策略
 
 #### （1）ID_WORKER
@@ -384,5 +386,506 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
 }
 ```
 
-### 测试
+#### 测试
 ![](https://files.mdnice.com/user/3934/f6db4ac4-2d91-4dfb-9e00-5ec93a062798.png)
+
+### 3、乐观锁
+
+主要适用场景：当要更新一条记录的时候，希望这条记录没有被别人更新，也就是说实现线程安全的数据更新
+
+乐观锁实现方式：
+
+- 取出记录时，获取当前version
+- 更新时，带上这个version
+- 执行更新时， set version = newVersion where version = oldVersion
+- 如果version不对，就更新失败
+
+#### （1）数据库中添加version字段
+
+
+
+![](https://files.mdnice.com/user/3934/613913b4-b487-43ff-81d4-7f20e32852e9.png)
+#### （2）实体类添加version字段
+
+并添加 @Version 注解
+```
+@Version
+    @TableField(fill = FieldFill.INSERT)
+    private Integer version;
+```
+#### （3）元对象处理器接口添加version的insert默认值
+```java
+@Override
+public void insertFill(MetaObject metaObject) {
+   ......
+    this.setFieldValByName("version", 1, metaObject);
+}
+```
+
+**特别说明:**
+
+- 支持的数据类型只有 int,Integer,long,Long,Date,Timestamp,LocalDateTime
+- 整数类型下 newVersion = oldVersion + 1
+- newVersion 会回写到 entity 中
+- 仅支持 updateById(id) 与 update(entity, wrapper) 方法
+- 在 update(entity, wrapper) 方法下, wrapper 不能复用!!!
+
+#### （4）在 MybatisPlusConfig 中注册 Bean
+
+创建配置类
+
+```java
+package com.example.mpstudy.config;
+
+import com.baomidou.mybatisplus.annotation.DbType;
+import com.baomidou.mybatisplus.extension.plugins.OptimisticLockerInterceptor;
+import org.springframework.context.annotation.Bean;
+
+@Configuration
+@MapperScan("com.example.mpstudy.mapper")
+public class MybatisPlusConfig {
+    /**
+     * 乐观锁插件
+     */
+    @Bean
+    public OptimisticLockerInterceptor optimisticLockerInterceptor() {
+        return new OptimisticLockerInterceptor();
+    }
+}
+```
+
+#### （5）测试乐观锁可以修改成功
+
+测试后分析打印的sql语句，将version的数值进行了加1操作
+
+```java
+
+/**
+ * 测试 乐观锁插件
+ */
+@Test
+public void testOptimisticLocker() {
+    //查询
+    User user = userMapper.selectById(1L);
+    //修改数据
+    user.setName("Helen Yao");
+    user.setEmail("helen@qq.com");
+    //执行更新
+    userMapper.updateById(user);
+}
+```
+![](https://files.mdnice.com/user/3934/143bc0a5-71f5-4ae0-8043-47d5bd9bc005.png)
+#### （5）测试乐观锁修改失败
+
+```java
+@Test
+    public void testOptimisticLockerFail() {
+        //查询
+        User user = userMapper.selectById(1L);
+        //修改数据
+        user.setName("Helen Yao1");
+        user.setEmail("helen@qq.com1");
+        //模拟取出数据后，数据库中version实际数据比取出的值大，即已被其它线程修改并更新了version
+
+        user.setVersion(user.getVersion() - 1);
+        //执行更新
+        userMapper.updateById(user);
+    }
+```
+
+![](https://files.mdnice.com/user/3934/b3d1b57d-ea17-46ea-9d26-0e4172037fac.png)
+
+## 三、select
+
+### 1、根据id查询记录
+```java
+@Test
+public void testSelectById(){
+    User user = userMapper.selectById(1L);
+    System.out.println(user);
+}
+```
+### 2、通过多个id批量查询
+完成了动态sql的foreach的功能
+```java
+@Test
+public void testSelectBatchIds(){
+    List<User> users = userMapper.selectBatchIds(Arrays.asList(1, 2, 3));
+    users.forEach(System.out::println);
+}
+```
+
+### 3、简单的条件查询
+
+通过map封装查询条件
+```java
+@Test
+public void testSelectByMap(){
+    HashMap<String, Object> map = new HashMap<>();
+    map.put("name", "Helen");
+    map.put("age", 18);
+    List<User> users = userMapper.selectByMap(map);
+    users.forEach(System.out::println);
+}
+```
+注意：map中的key对应的是数据库中的列名。例如数据库user_id，实体类是userId，这时map的key需要填写user_id\
+
+### 4、分页
+
+MyBatis Plus自带分页插件，只要简单的配置即可实现分页功能
+
+#### （1）创建配置类
+
+```java
+
+    /**
+     * 分页插件
+     */
+    @Bean
+    public PaginationInterceptor paginationInterceptor() {
+        return new PaginationInterceptor();
+    }
+  ```
+（2）测试selectPage分页
+```java
+    @Test
+    public void testSelectPage() {
+        Page<User> page = new Page<>(1,5);
+        userMapper.selectPage(page, null);
+        page.getRecords().forEach(System.out::println);
+        System.out.println(page.getCurrent());
+        System.out.println(page.getPages());
+        System.out.println(page.getSize());
+        System.out.println(page.getTotal());
+        System.out.println(page.hasNext());
+        System.out.println(page.hasPrevious());
+    }
+```
+
+
+
+测试：最终通过page对象获取相关数据
+![](https://files.mdnice.com/user/3934/7d698914-b82b-462e-ba05-7801f80fb276.png)
+
+#### （3）测试selectMapsPage分页：结果集是Map
+
+```java
+    @Test
+    public void testSelectMapsPage() {
+        Page<User> page = new Page<>(1, 5);
+        IPage<Map<String, Object>> mapIPage = userMapper.selectMapsPage(page, null);
+        //注意：此行必须使用 mapIPage 获取记录列表，否则会有数据类型转换错误
+        mapIPage.getRecords().forEach(System.out::println);
+        System.out.println(page.getCurrent());
+        System.out.println(page.getPages());
+        System.out.println(page.getSize());
+        System.out.println(page.getTotal());
+        System.out.println(page.hasNext());
+        System.out.println(page.hasPrevious());
+    }
+```
+
+![](https://files.mdnice.com/user/3934/c25aefc2-a673-4205-bfb4-1f4c21c0b9c2.png)
+## 四、delete
+
+### 1、根据id删除记录
+
+```java
+    @Test
+    public void testDeleteById(){
+        int result = userMapper.deleteById(8L);
+        System.out.println(result);
+    }
+```
+### 2、批量删除
+
+```java
+    @Test
+    public void testDeleteBatchIds() {
+        int result = userMapper.deleteBatchIds(Arrays.asList(8, 9, 10));
+        System.out.println(result);
+    }
+```
+### 3、简单的条件查询删除
+
+```java
+    @Test
+    public void testDeleteByMap() {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("name", "Helen");
+        map.put("age", 18);
+        int result = userMapper.deleteByMap(map);
+        System.out.println(result);
+    }
+```
+
+### 4、逻辑删除
+
+- 物理删除：真实删除，将对应数据从数据库中删除，之后查询不到此条被删除数据
+
+- 逻辑删除：假删除，将对应数据中代表是否被删除字段状态修改为“被删除状态”，之后在数据库中仍旧能看到此条数据记录
+
+#### （1）数据库中添加 deleted字段
+
+![](https://files.mdnice.com/user/3934/314c3df2-89b6-4372-a6e2-111ee0cfb1a4.png)
+
+#### （2）实体类添加deleted 字段
+
+并加上 @TableLogic 注解 和 @TableField(fill = FieldFill.INSERT) 注解
+
+#### （3）元对象处理器接口添加deleted的insert默认值
+```java
+@Override
+
+public void insertFill(MetaObject metaObject) {
+   ......
+    this.setFieldValByName("deleted", 0, metaObject);
+}
+```
+#### （4）application.properties 加入配置
+此为默认值，如果你的默认值和mp默认的一样,该配置可无
+
+```
+mybatis-plus.global-config.db-config.logic-delete-value=1
+
+mybatis-plus.global-config.db-config.logic-not-delete-value=0
+```
+
+#### （5）在 MybatisPlusConfig 中注册 Bean
+```java
+@Bean
+public ISqlInjector sqlInjector() {
+    return new LogicSqlInjector();
+}
+```
+
+#### （6）测试逻辑删除
+- 测试后发现，数据并没有被删除，deleted字段的值由0变成了1
+
+- 测试后分析打印的sql语句，是一条update
+
+- 注意：被删除数据的deleted 字段的值必须是 0，才能被选取出来执行逻辑删除的操作
+
+![](https://files.mdnice.com/user/3934/a1a23f23-5799-4000-9caa-a78e4d92587e.png)
+
+
+![](https://files.mdnice.com/user/3934/7234a97f-7a4f-437f-8f18-d9df7b49f638.png)
+
+## 六、复杂条件查询
+### 一、wapper介绍
+
+如果想进行复杂条件查询，那么需要使用条件构造器 Wapper
+
+![](https://files.mdnice.com/user/3934/59b96d28-c238-4cb3-8f63-a811b6882100.png)
+
+- Wrapper ： 条件构造抽象类，最顶端父类
+- AbstractWrapper ： 用于查询条件封装，生成 sql 的 where 条件    - QueryWrapper ： Entity 对象封装操作类，不是用lambda语法        - UpdateWrapper ： Update 条件封装，用于Entity对象更新操作
+- AbstractLambdaWrapper ： Lambda 语法使用 Wrapper统一处理解析 lambda 获取 column。
+- LambdaQueryWrapper ：看名称也能明白就是用于Lambda语法使用的查询Wrapper
+- LambdaUpdateWrapper ： Lambda 更新封装Wrapper
+
+### 二、AbstractWrapper
+
+以下条件构造器的方法入参中的 column 均表示数据库字段
+
+#### 1、ge、gt、le、lt、isNull、isNotNull
+
+```java
+    @Test
+    public void testDelete() {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper
+                .isNull("name")
+                .ge("age", 12)
+                .isNotNull("email");
+        int result = userMapper.delete(queryWrapper);
+        System.out.println("delete return count = " + result);
+    }
+```
+
+![](https://files.mdnice.com/user/3934/1155f4e2-3dc7-4f11-a74e-32cb329a56a0.png)
+
+#### 2、eq、ne
+
+```java
+    @Test
+    public void testSelectOne() {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("name", "Tom");
+        User user = userMapper.selectOne(queryWrapper);
+        System.out.println(user);
+    }
+```
+
+
+#### 3、between、notBetween
+
+```java
+    @Test
+    public void testSelectCount() {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.between("age", 20, 30);
+        Integer count = userMapper.selectCount(queryWrapper);
+        System.out.println(count);
+    }
+```    
+#### 4、allEq
+
+```java
+    @Test
+    public void testSelectList1() {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", 2);
+        map.put("name", "Jack");
+        map.put("age", 20);
+        queryWrapper.allEq(map);
+        List<User> users = userMapper.selectList(queryWrapper);
+        users.forEach(System.out::println);
+    }
+```
+
+#### 5、like、notLike、likeLeft、likeRight
+
+```java
+    @Test
+    public void testSelectMaps() {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper
+                .notLike("name", "e")
+                .likeRight("email", "t");
+        List<Map<String, Object>> maps = userMapper.selectMaps(queryWrapper);//返回值是Map列表
+        maps.forEach(System.out::println);
+    }
+```
+
+#### 6、in、notIn、inSql、notinSql、exists、notExists
+
+```java
+    @Test
+    public void testSelectObjs() {
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        //queryWrapper.in("id", 1, 2, 3);
+
+        queryWrapper.inSql("id", "select id from user where id < 3");
+        List<Object> objects = userMapper.selectObjs(queryWrapper);//返回值是Object列表
+
+        objects.forEach(System.out::println);
+    }
+ ```
+
+
+![](https://files.mdnice.com/user/3934/7bed4e00-846e-4b65-ad4e-a9ccacead6d2.png)
+
+#### 7、or、and
+
+注意：这里使用的是 UpdateWrapper
+
+不调用or则默认为使用 and 连
+
+```java
+    @Test
+    public void testUpdate1() {
+        //修改值
+        User user = new User();
+        user.setAge(99);
+        user.setName("Andy");
+        //修改条件
+
+        UpdateWrapper<User> userUpdateWrapper = new UpdateWrapper<>();
+        userUpdateWrapper
+                .like("name", "h")
+                .or()
+                .between("age", 20, 30);
+        int result = userMapper.update(user, userUpdateWrapper);
+        System.out.println(result);
+    }
+```
+
+![](https://files.mdnice.com/user/3934/1a89d29a-370d-49b4-8f1c-30f923ba20cb.png)
+
+
+#### 8、嵌套or、嵌套and
+
+这里使用了lambda表达式，or中的表达式最后翻译成sql时会被加上圆括号
+
+```java
+    @Test
+    public void testUpdate2() {
+        //修改值
+        User user = new User();
+        user.setAge(99);
+        user.setName("Andy");
+        //修改条件
+
+        UpdateWrapper<User> userUpdateWrapper = new UpdateWrapper<>();
+        userUpdateWrapper
+                .like("name", "h")
+                .or(i -> i.eq("name", "李白").ne("age", 20));
+        int result = userMapper.update(user, userUpdateWrapper);
+        System.out.println(result);
+    }
+```    
+#### 9、orderBy、orderByDesc、orderByAsc
+```java
+@Test
+public void testSelectListOrderBy() {
+    QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+    queryWrapper.orderByDesc("id");
+    List<User> users = userMapper.selectList(queryWrapper);
+    users.forEach(System.out::println);
+}
+```
+
+#### 10、last
+
+直接拼接到 sql 的最后
+
+注意：只能调用一次,多次调用以最后一次为准 有sql注入的风险,请谨慎使用
+
+```java
+@Test
+public void testSelectListLast() {
+    QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+    queryWrapper.last("limit 1");
+    List<User> users = userMapper.selectList(queryWrapper);
+    users.forEach(System.out::println);
+}
+```
+#### 11、select指定要查询的列
+
+```java
+@Test
+public void testSelectListColumn() {
+    QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+    queryWrapper.select("id", "name", "age");
+    List<User> users = userMapper.selectList(queryWrapper);
+    users.forEach(System.out::println);
+}
+```
+
+#### 12、set、setSql
+
+
+最终的sql会合并 user.setAge()，以及 userUpdateWrapper.set()  和 setSql() 中 的字段
+
+```java
+@Test
+
+public void testUpdateSet() {
+    //修改值
+
+    User user = new User();
+    user.setAge(99);
+    //修改条件
+
+    UpdateWrapper<User> userUpdateWrapper = new UpdateWrapper<>();
+    userUpdateWrapper
+       .like("name", "h")
+       .set("name", "老李头")//除了可以查询还可以使用set设置修改的字段
+
+       .setSql(" email = '123@qq.com'");//可以有子查询
+
+    int result = userMapper.update(user, userUpdateWrapper);
+}
+```
