@@ -1,5 +1,7 @@
 package com.example.mpstudy;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.mpstudy.entity.User;
 import com.example.mpstudy.mapper.UserMapper;
 import org.junit.jupiter.api.Test;
@@ -8,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
+import java.util.Map;
 
 @SpringBootTest
 @MapperScan("com.example.mpstudy.mapper")
@@ -38,8 +41,6 @@ class MpStudyApplicationTests {
     }
 
 
-
-
     @Test
     public void testUpdateById() {
         User user = new User();
@@ -62,10 +63,9 @@ class MpStudyApplicationTests {
         //执行更新
         userMapper.updateById(user);
     }
+
     /**
-
      * 测试乐观锁插件 失败
-
      */
 
     @Test
@@ -83,9 +83,36 @@ class MpStudyApplicationTests {
     }
 
     @Test
-    public void testSelectById(){
+    public void testSelectById() {
         User user = userMapper.selectById(1L);
         System.out.println(user);
+    }
+
+    @Test
+    public void testSelectPage() {
+        Page<User> page = new Page<>(1, 5);
+        userMapper.selectPage(page, null);
+        page.getRecords().forEach(System.out::println);
+        System.out.println(page.getCurrent());
+        System.out.println(page.getPages());
+        System.out.println(page.getSize());
+        System.out.println(page.getTotal());
+        System.out.println(page.hasNext());
+        System.out.println(page.hasPrevious());
+    }
+
+    @Test
+    public void testSelectMapsPage() {
+        Page<User> page = new Page<>(1, 5);
+        IPage<Map<String, Object>> mapIPage = userMapper.selectMapsPage(page, null);
+        //注意：此行必须使用 mapIPage 获取记录列表，否则会有数据类型转换错误
+        mapIPage.getRecords().forEach(System.out::println);
+        System.out.println(page.getCurrent());
+        System.out.println(page.getPages());
+        System.out.println(page.getSize());
+        System.out.println(page.getTotal());
+        System.out.println(page.hasNext());
+        System.out.println(page.hasPrevious());
     }
 
 }
